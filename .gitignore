@@ -1,0 +1,42 @@
+# .NET build/output
+bin/
+obj/
+*.exe
+*.dll
+*.pdb
+*.xml  # Optional: Documentation files
+
+# IDE/Editor
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.swp
+
+# Debug/Test artifacts
+*.log
+*.dotCover
+TestResults/
+
+# Local runtime files (e.g., for HTTP server testing)
+appsettings.Development.json
+/local/  # Custom folder for temp files
+
+# Dependency directories (if any)
+packages/
+.nuget/
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+
+
+
+
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose*.yml
