@@ -31,12 +31,5 @@ packages/
 .DS_Store
 Thumbs.db
 
-
-
-
-
-
 # Docker
-Dockerfile
-.dockerignore
-docker-compose*.yml
+**/.dockerignore
