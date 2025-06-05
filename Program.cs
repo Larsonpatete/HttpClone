@@ -18,12 +18,12 @@ class TcpServer
             Console.WriteLine("Client connected.");
 
             // Handle each client in a new thread
-            Task.Run(() => HandleClient(client));
+            _ = HandleClient(client); // Fire and forget for simplicity
         }
         listener.Stop();
     }
 
-    private static void HandleClient(TcpClient client)
+    private static async Task HandleClient(TcpClient client)
     {
         try
         {
@@ -34,7 +34,7 @@ class TcpServer
 
             byte[] buffer = new byte[1024];
 
-            int bytesRead = stream.Read(buffer, 0, buffer.Length);
+            int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
             if (bytesRead == 0) client.Close(); // client closed
 
             string clientMessage = Encoding.ASCII.GetString(buffer, 0, bytesRead);
@@ -44,25 +44,58 @@ class TcpServer
             string[] parts = clientMessage.Split('\n');
             if (parts.Length > 0)
             {
-                // Extract the HTTP header line
+                // Extract the HTTP request line: e.g., "GET / HTTP/1.1"
                 string[] httpHeaderParts = parts[0].Split(' ');
-                string method = "plain";
-                string body = "Unsupported method or malformed request";
-                if (httpHeaderParts[0] == "GET")
-                {
-                    if (httpHeaderParts[1] == "/")
-                    {
-                        body = "<h1>Hello from TCP Server!</h1>";
-                        method = "html";
 
-                    }
-                    else if (httpHeaderParts[1] == "/api/hello")
+                if (httpHeaderParts.Length >= 2)
+                {
+                    string httpMethod = httpHeaderParts[0];
+                    string route = httpHeaderParts[1];
+
+                    string body;
+                    string type;
+                    int statusCode;
+
+                    if (httpMethod == "GET")
                     {
-                        body = "{\"message\": \"Hello, world!\"}";
+                        if (route == "/")
+                        {
+                            body = "<h1>Hello from TCP Server!</h1>";
+                            type = "html";
+                            statusCode = 200;
+                        }
+                        else if (route == "/api/hello")
+                        {
+                            body = "{\"message\": \"Hello, world!\"}";
+                            type = "json";
+                            statusCode = 200;
+                        }
+                        else
+                        {
+                            body = "404 Not Found";
+                            type = "plain";
+                            statusCode = 404;
+                        }
                     }
+                    else
+                    {
+                        body = "400 Bad Request - Only GET is supported";
+                        type = "plain";
+                        statusCode = 400;
+                    }
+
+                    await SendHttpResponse(stream, statusCode, body, type);
                 }
-                SendHttpResponse(stream, httpHeaderParts[0], body, method);
+                else
+                {
+                    await SendHttpResponse(stream, 400, "400 Bad Request - Malformed request");
+                }
             }
+            else
+            {
+                await SendHttpResponse(stream, 400, "400 Bad Request - Empty request");
+            }
+
             client.Close();
         }
         catch (Exception e)
@@ -71,14 +104,34 @@ class TcpServer
         }
     }
 
-    private static void SendHttpResponse(NetworkStream stream, string type, string body, string method = "")
+    private static async Task SendHttpResponse(NetworkStream stream, int statusCode, string body, string type = "plain")
     {
-        string response = $"HTTP/1.1 200 OK\r\n" + // change
-                  $"Content-Type: text{(method ?? "/plain")}\r\n" +
-                  $"Content-Length: {body.Length}\r\n" +
-                  $"\r\n" +
-                  $"{body}";
-        byte[] responseBytes = Encoding.ASCII.GetBytes(response);
-        stream.Write(responseBytes, 0, responseBytes.Length);
+        string statusText = statusCode switch
+        {
+            200 => "OK",
+            400 => "Bad Request",
+            404 => "Not Found",
+            500 => "Internal Server Error",
+            _ => "OK"
+        };
+
+        string contentType = type switch
+        {
+            "html" => "text/html",
+            "json" => "application/json",
+            _ => "text/plain"
+        };
+
+        string response = $"HTTP/1.1 {statusCode} {statusText}\r\n" +
+                          $"Content-Type: {contentType}; charset=UTF-8\r\n" +
+                          $"Content-Length: {Encoding.UTF8.GetByteCount(body)}\r\n" +
+                          $"Connection: close\r\n" +
+                          $"\r\n" +
+                          $"{body}";
+
+        byte[] responseBytes = Encoding.UTF8.GetBytes(response);
+        await stream.WriteAsync(responseBytes, 0, responseBytes.Length);
     }
+
+
 }
