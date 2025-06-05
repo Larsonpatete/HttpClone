@@ -12,17 +12,30 @@ class TcpServer
         listener.Start();
         Console.WriteLine("Server listening on port " + PORT);
 
-        TcpClient client = listener.AcceptTcpClient();
-        Console.WriteLine("Client connected.");
-
-        NetworkStream stream = client.GetStream();
-
-        byte[] buffer = new byte[1024];
         while (true)
         {
+            TcpClient client = listener.AcceptTcpClient();
+            Console.WriteLine("Client connected.");
+
+            // Handle each client in a new thread
+            Task.Run(() => HandleClient(client));
+        }
+        listener.Stop();
+    }
+
+    private static void HandleClient(TcpClient client)
+    {
+        try
+        {
             // Read from client
+            NetworkStream stream = client.GetStream();
+
+            Console.WriteLine("Client connected.");
+
+            byte[] buffer = new byte[1024];
+
             int bytesRead = stream.Read(buffer, 0, buffer.Length);
-            if (bytesRead == 0) break; // client closed
+            if (bytesRead == 0) client.Close(); // client closed
 
             string clientMessage = Encoding.ASCII.GetString(buffer, 0, bytesRead);
             Console.WriteLine("From client: " + clientMessage);
@@ -42,21 +55,25 @@ class TcpServer
                         body = "<h1>Hello from TCP Server!</h1>";
                         method = "html";
 
-                    } else if(httpHeaderParts[1] == "/api/hello")
+                    }
+                    else if (httpHeaderParts[1] == "/api/hello")
                     {
                         body = "{\"message\": \"Hello, world!\"}";
                     }
                 }
                 SendHttpResponse(stream, httpHeaderParts[0], body, method);
             }
+            client.Close();
         }
-        client.Close();
-        listener.Stop();
+        catch (Exception e)
+        {
+            Console.WriteLine($"Error: {e.Message}");
+        }
     }
 
     private static void SendHttpResponse(NetworkStream stream, string type, string body, string method = "")
     {
-        string response = $"HTTP/1.1 200 OK\r\n" +
+        string response = $"HTTP/1.1 200 OK\r\n" + // change
                   $"Content-Type: text{(method ?? "/plain")}\r\n" +
                   $"Content-Length: {body.Length}\r\n" +
                   $"\r\n" +
